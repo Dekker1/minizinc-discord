@@ -1,4 +1,5 @@
 import os
+import random
 from datetime import timedelta
 from pathlib import Path
 
@@ -9,7 +10,17 @@ from discord.ext import commands
 # Initialise Discord bot
 TOKEN = os.getenv('DISCORD_TOKEN')
 bot = commands.Bot(command_prefix='!')
-
+running_messages = ([
+    "Commencing infinite loop...",
+    "The Constraint Elders are contemplating your request...",
+    "Generating random numbers ...er... I mean solving! Yeah, solving...",
+    "Sacrificing a resistor to the machine gods...",
+    "Programming the flux capacitor...",
+    "Compiling Gecode. Sit back and relax...",
+    "Constructing additional pylons...",
+    "Proving P=NP...",
+    "Work, work...",
+])
 
 @bot.event
 async def on_ready():
@@ -35,16 +46,18 @@ async def mzn(ctx, instance: str):
     message = message.replace("!mzn ", "", 1)
     message = message.strip("` \t")
 
+    response = await ctx.send(random.choice(running_messages))
+
     instance = minizinc.Instance(chuffed)
     instance.add_string(message)
 
     try:
-        result = await instance.solve_async(timeout=timedelta(seconds=10))
-        response = f"`{result.status}` in {result.statistics['time'].total_seconds()}s: {'No Solution' if result.solution is None else str(result.solution)}"
+        result = await instance.solve_async(timeout=timedelta(seconds=30))
+        output = f"`{result.status}` in {result.statistics['time'].total_seconds()}s: {'No Solution' if result.solution is None else str(result.solution)}"
     except minizinc.MiniZincError as err:
-        response = "```" + str(err) + "```"
+        output = "```" + str(err) + "```"
 
-    await ctx.send(response)
+    await response.edit(content=output)
 
 
 @bot.command(name='flatten', help='Flatten a MiniZinc instance')
@@ -54,17 +67,19 @@ async def mzn(ctx, instance: str):
     message = message.replace("!flatten ", "", 1)
     message = message.strip("` \t")
 
+    response = await ctx.send(random.choice(running_messages))
+
     instance = minizinc.Instance(no_solver)
     instance.add_string(message)
 
     try:
         with instance.flat() as (fzn, ozn, statistics):
             flatzinc = Path(fzn.name).read_text()
-            response = f"```{flatzinc}```"
+            output = f"```{flatzinc}```"
     except minizinc.MiniZincError as err:
-        response = "```" + str(err) + "```"
+        output = "```" + str(err) + "```"
 
-    await ctx.send(response)
+    await response.edit(content=output)
 
 
 bot.run(TOKEN)
