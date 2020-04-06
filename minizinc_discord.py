@@ -40,16 +40,12 @@ async def version(ctx):
 
 
 @bot.command(name='mzn', help='Run a MiniZinc instance')
-async def mzn(ctx, instance: str):
-    message = ctx.message.content
-    assert message.startswith("!mzn ")
-    message = message.replace("!mzn ", "", 1)
-    message = message.strip("` \t")
-
+async def mzn(ctx, *, arg: str):
     response = await ctx.send(random.choice(running_messages))
 
+    arg = arg.strip("` \t")
     instance = minizinc.Instance(chuffed)
-    instance.add_string(message)
+    instance.add_string(arg)
 
     try:
         result = await instance.solve_async(timeout=timedelta(seconds=30))
@@ -61,16 +57,12 @@ async def mzn(ctx, instance: str):
 
 
 @bot.command(name='flatten', help='Flatten a MiniZinc instance')
-async def mzn(ctx, instance: str):
-    message = ctx.message.content
-    assert message.startswith("!flatten ")
-    message = message.replace("!flatten ", "", 1)
-    message = message.strip("` \t")
-
+async def mzn(ctx, *, arg: str):
     response = await ctx.send(random.choice(running_messages))
 
+    arg = arg.strip("` \t")
     instance = minizinc.Instance(no_solver)
-    instance.add_string(message)
+    instance.add_string(arg)
 
     try:
         with instance.flat() as (fzn, ozn, statistics):
