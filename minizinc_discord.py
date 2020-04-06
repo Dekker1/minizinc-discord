@@ -43,6 +43,7 @@ async def version(ctx):
 @bot.command(name="mzn", help="Run a MiniZinc instance")
 async def mzn(ctx, *, arg: str):
     response = await ctx.send(random.choice(running_messages))
+    await ctx.message.add_reaction("⌛")
 
     arg = arg.strip("` \t")
     instance = minizinc.Instance(chuffed)
@@ -55,11 +56,14 @@ async def mzn(ctx, *, arg: str):
         output = "```" + str(err) + "```"
 
     await response.edit(content=output)
+    await ctx.message.remove_reaction("⌛", bot.user)
+    await ctx.message.add_reaction("✅")
 
 
 @bot.command(name="flatten", help="Flatten a MiniZinc instance")
 async def mzn(ctx, *, arg: str):
     response = await ctx.send(random.choice(running_messages))
+    await ctx.message.add_reaction("⌛")
 
     arg = arg.strip("` \t")
     instance = minizinc.Instance(no_solver)
@@ -73,6 +77,8 @@ async def mzn(ctx, *, arg: str):
         output = "```" + str(err) + "```"
 
     await response.edit(content=output)
+    await ctx.message.remove_reaction("⌛", bot.user)
+    await ctx.message.add_reaction("✅")
 
 
 bot.run(TOKEN)
