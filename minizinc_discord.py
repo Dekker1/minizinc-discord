@@ -61,7 +61,7 @@ async def mzn(ctx, *, arg: str):
 
 
 @bot.command(name="flatten", help="Flatten a MiniZinc instance")
-async def mzn(ctx, *, arg: str):
+async def flatten(ctx, *, arg: str):
     response = await ctx.send(random.choice(running_messages))
     await ctx.message.add_reaction("⌛")
 
