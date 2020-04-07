@@ -25,7 +25,7 @@ running_messages = [
 
 @bot.event
 async def on_ready():
-    print(f"{bot.user} has connected to Discord!")
+    print(f"{datetime.now().strftime('%H:%M:%S')} - {bot.user} has connected to Discord!")
 
 
 # Initialise MiniZinc
