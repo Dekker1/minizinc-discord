@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import os
 import random
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Dict, List
 
 import minizinc
 
@@ -22,6 +25,43 @@ running_messages = [
     "Work, work...",
 ]
 
+class OptionError(Exception):
+    pass
+
+class Option:
+    __slots__ = ('key', 'value')
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+
+    @classmethod
+    async def convert(cls, ctx, argument):
+        arguments = argument.split("=")
+        if len(arguments) != 2:
+            raise BadArgument("Invalid option")
+
+        return cls(arguments[0], arguments[1])
+
+    @staticmethod
+    def process(options: List[Option], defaults: Dict[str, Any]) -> Dict[str, Any]:
+        ret = defaults.copy()
+
+        for option in options:
+            if option.key == "solver":
+                try:
+                    ret["solver"] = minizinc.Solver.lookup(option.value)
+                except LookupError:
+                    raise OptionError(f"Solver \"{option.value}\" is not available")
+            elif option.key == "timeout":
+                if int(option.value) <= 30:
+                    ret["timeout"] = timedelta(seconds=int(option.value))
+                else:
+                    raise OptionError("Timeout cannot be set to a value higher than 30 seconds")
+
+        return ret
+
+    def __repr__(self):
+        return f"\"{self.key}\"=\"{self.value}\""
 
 @bot.event
 async def on_ready():
@@ -41,18 +81,24 @@ async def version(ctx):
 
 
 @bot.command(name="mzn", help="Run a MiniZinc instance")
-async def mzn(ctx, *, arg: str):
+async def mzn(ctx, options: commands.Greedy[Option], *, arg: str):
     response = await ctx.send(random.choice(running_messages))
     await ctx.message.add_reaction("⌛")
 
     arg = arg.strip("` \t")
-    instance = minizinc.Instance(chuffed)
-    instance.add_string(arg)
+
+    arguments = {
+        "solver": chuffed,
+        "timeout": timedelta(seconds=30),
+    }
 
     try:
-        result = await instance.solve_async(timeout=timedelta(seconds=30))
+        arguments = Option.process(options, arguments)
+        instance = minizinc.Instance(arguments["solver"])
+        instance.add_string(arg)
+        result = await instance.solve_async(timeout=arguments["timeout"])
         output = f"`{result.status}` in {result.statistics['time'].total_seconds()}s: {'No Solution' if result.solution is None else str(result.solution)}"
-    except minizinc.MiniZincError as err:
+    except (OptionError, minizinc.MiniZincError) as err:
         output = "```" + str(err) + "```"
 
     await response.edit(content=output)
@@ -61,19 +107,24 @@ async def mzn(ctx, *, arg: str):
 
 
 @bot.command(name="flatten", help="Flatten a MiniZinc instance")
-async def flatten(ctx, *, arg: str):
+async def flatten(ctx, options: commands.Greedy[Option], *, arg: str):
     response = await ctx.send(random.choice(running_messages))
     await ctx.message.add_reaction("⌛")
 
     arg = arg.strip("` \t")
-    instance = minizinc.Instance(no_solver)
-    instance.add_string(arg)
 
+    arguments = {
+        "solver": no_solver,
+        "timeout": timedelta(seconds=30),
+    }
     try:
-        with instance.flat() as (fzn, ozn, statistics):
+        arguments = Option.process(options, arguments)
+        instance = minizinc.Instance(arguments["solver"])
+        instance.add_string(arg)
+        with instance.flat(arguments["timeout"]) as (fzn, ozn, statistics):
             flatzinc = Path(fzn.name).read_text()
             output = f"```{flatzinc}```"
-    except minizinc.MiniZincError as err:
+    except (OptionError, minizinc.MiniZincError) as err:
         output = "```" + str(err) + "```"
 
     await response.edit(content=output)
