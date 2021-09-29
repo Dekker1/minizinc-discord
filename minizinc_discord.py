@@ -23,13 +23,18 @@ running_messages = [
     "Constructing additional pylons...",
     "Proving P=NP...",
     "Work, work...",
+    "Facticulating...",
+    "Detonating in 3... 2... 1. Boom town.",
 ]
+
 
 class OptionError(Exception):
     pass
 
+
 class Option:
-    __slots__ = ('key', 'value')
+    __slots__ = ("key", "value")
+
     def __init__(self, key, value):
         self.key = key
         self.value = value
@@ -51,21 +56,26 @@ class Option:
                 try:
                     ret["solver"] = minizinc.Solver.lookup(option.value)
                 except LookupError:
-                    raise OptionError(f"Solver \"{option.value}\" is not available")
+                    raise OptionError(f'Solver "{option.value}" is not available')
             elif option.key == "timeout":
                 if int(option.value) <= 30:
                     ret["timeout"] = timedelta(seconds=int(option.value))
                 else:
-                    raise OptionError("Timeout cannot be set to a value higher than 30 seconds")
+                    raise OptionError(
+                        "Timeout cannot be set to a value higher than 30 seconds"
+                    )
 
         return ret
 
     def __repr__(self):
-        return f"\"{self.key}\"=\"{self.value}\""
+        return f'"{self.key}"="{self.value}"'
+
 
 @bot.event
 async def on_ready():
-    print(f"{datetime.now().strftime('%H:%M:%S')} - {bot.user} has connected to Discord!")
+    print(
+        f"{datetime.now().strftime('%H:%M:%S')} - {bot.user} has connected to Discord!"
+    )
 
 
 # Initialise MiniZinc
@@ -97,7 +107,7 @@ async def mzn(ctx, options: commands.Greedy[Option], *, arg: str):
         instance = minizinc.Instance(arguments["solver"])
         instance.add_string(arg)
         result = await instance.solve_async(timeout=arguments["timeout"])
-        output = f"`{result.status}` in {result.statistics['time'].total_seconds()}s: {'No Solution' if result.solution is None else str(result.solution)}"
+        output = f"`{result.status}` in {result.statistics['time'].total_seconds()}s: {'```' + str(result.solution) + '```' if result.solution is not None else 'No Solution'}"
     except (OptionError, minizinc.MiniZincError) as err:
         output = "```" + str(err) + "```"
 
