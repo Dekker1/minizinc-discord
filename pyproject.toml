@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "minizinc-discord"
+version = "0.1.0"
+description = "A Discord bot that will solve MiniZinc instances"
+authors = ["Jip J. Dekker <jip@dekker.one>"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+discord = "^1.7.3"
+minizinc = "^0.4.2"
+
+[tool.poetry.dev-dependencies]
+black = "^21.9b0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
