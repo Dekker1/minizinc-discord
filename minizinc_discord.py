@@ -8,11 +8,16 @@ from typing import Dict, List
 
 import minizinc
 
+import discord
 from discord.ext import commands
 
 # Initialise Discord bot
 TOKEN = os.getenv("DISCORD_TOKEN")
-bot = commands.Bot(command_prefix="!")
+
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(intents=intents, command_prefix="!")
 running_messages = [
     "Commencing infinite loop...",
     "The Constraint Elders are contemplating your request...",
@@ -43,7 +48,7 @@ class Option:
     async def convert(cls, ctx, argument):
         arguments = argument.split("=")
         if len(arguments) != 2:
-            raise BadArgument("Invalid option")
+            raise commands.BadArgument("Invalid option")
 
         return cls(arguments[0], arguments[1])
 
