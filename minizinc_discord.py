@@ -4,7 +4,7 @@ import os
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import minizinc
 
@@ -83,6 +83,20 @@ async def on_ready():
     )
 
 
+def get_time_str(statistics: Dict[str, Any]) -> str:
+    if not "time" in statistics:
+        return "No Time"
+    time = statistics["time"]
+    if isinstance(time, timedelta):
+        return f"{time.total_seconds()}s"
+    elif isinstance(time, int):
+        return f"{timedelta(milliseconds=time).total_seconds()}s"
+    elif isinstance(time, float):
+        return f"{time}s"
+    else:
+        return f"{time}"
+
+
 # Initialise MiniZinc
 chuffed = minizinc.Solver.lookup("chuffed")
 no_solver = minizinc.Solver("No Solver", "1.0.0", "com.discord.no_solver", "false")
@@ -112,7 +126,7 @@ async def mzn(ctx, options: commands.Greedy[Option], *, arg: str):
         instance = minizinc.Instance(arguments["solver"])
         instance.add_string(arg)
         result = await instance.solve_async(timeout=arguments["timeout"])
-        output = f"`{result.status}` in {result.statistics['time'].total_seconds()}s: {'```' + str(result.solution) + '```' if result.solution is not None else 'No Solution'}"
+        output = f"`{result.status}` in {get_time_str(result.statistics)}: {'```' + str(result.solution) + '```' if result.solution is not None else 'No Solution'}"
     except (OptionError, minizinc.MiniZincError) as err:
         output = "```" + str(err) + "```"
 
