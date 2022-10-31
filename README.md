@@ -71,3 +71,9 @@ The following message is an example of a correct `!flatten` command.
 
 Note that the `!flatten` command will not select a solver by default and will use the standard library to compile the problem.
 For example, this means that you will have to add the `solver=chuffed` option for the FlatZinc to match the run instance of the `!mzn` command without any additional options.
+
+### Version
+
+To ensure that you are on the same MiniZinc version as the bot, you can run the `!version` command.
+The command does not take any arguments.
+The bot will reply to the command with the output of `minizinc --version`.
