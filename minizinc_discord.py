@@ -104,14 +104,14 @@ no_solver = minizinc.Solver("No Solver", "1.0.0", "com.discord.no_solver", "fals
 
 # MiniZinc commands
 @bot.command(name="version", help="Report the current MiniZinc version")
-async def version(ctx):
+async def version(ctx: commands.Context):
     response = minizinc.default_driver.minizinc_version
-    await ctx.send(response)
+    await ctx.reply(response)
 
 
 @bot.command(name="mzn", help="Run a MiniZinc instance")
-async def mzn(ctx, options: commands.Greedy[Option], *, arg: str):
-    response = await ctx.send(random.choice(running_messages))
+async def mzn(ctx: commands.Context, options: commands.Greedy[Option], *, arg: str):
+    response = await ctx.reply(random.choice(running_messages))
     await ctx.message.add_reaction("⌛")
 
     arg = arg.strip("` \t")
@@ -136,8 +136,8 @@ async def mzn(ctx, options: commands.Greedy[Option], *, arg: str):
 
 
 @bot.command(name="flatten", help="Flatten a MiniZinc instance")
-async def flatten(ctx, options: commands.Greedy[Option], *, arg: str):
-    response = await ctx.send(random.choice(running_messages))
+async def flatten(ctx: commands.Context, options: commands.Greedy[Option], *, arg: str):
+    response = await ctx.reply(random.choice(running_messages))
     await ctx.message.add_reaction("⌛")
 
     arg = arg.strip("` \t")
