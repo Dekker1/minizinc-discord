@@ -23,7 +23,13 @@ def get_time_str(statistics: Dict[str, Any]) -> str:
 
 
 # Initialise MiniZinc
-no_solver = minizinc.Solver("No Solver", "1.0.0", "com.discord.no_solver", "false")
+mzn_version = minizinc.default_driver.parsed_version
+no_solver = minizinc.Solver(
+    "the MiniZinc standard library",
+    f"{mzn_version[0]}.{mzn_version[1]}.{mzn_version[2]}",
+    "com.discord.no_solver",
+    "false",
+)
 
 # Common functions
 async def solve(
@@ -69,7 +75,7 @@ async def flatten(
                 flatzinc = flatzinc[:1800]
                 flatzinc += "\n% ...TRUNCATED..."
             await interaction.followup.send(
-                f"{solver.name}, version {solver.version}, would be given the following FlatZinc:```{flatzinc}```"
+                f"Using the definitions of {solver.name}, version {solver.version}, this resulted in the following FlatZinc:```{flatzinc}```"
             )
             # FIXME: Full FlatZinc should be attached as a file when exceeding
     except minizinc.MiniZincError as err:
