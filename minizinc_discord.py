@@ -8,6 +8,7 @@ from typing import Any
 import minizinc
 from discord import (
     Client,
+    CustomActivity,
     Intents,
     Interaction,
     Message,
@@ -39,6 +40,8 @@ no_solver = minizinc.Solver(
     "com.discord.no_solver",
     "false",
 )
+# The first line is e.g. "MiniZinc to FlatZinc converter, version 2.10.1, build 32437703659"
+mzn_build = minizinc.default_driver.minizinc_version.splitlines()[0].split(", ", 1)[-1]
 STDLIB = "stdlib"
 
 # Solvers offered in the options menu. The GUI and tool "solvers" are of no use
@@ -213,7 +216,9 @@ class MZNClient(Client):
         # Initialise super
         intents = Intents.default()
         intents.message_content = True
-        super().__init__(intents=intents)
+        super().__init__(
+            intents=intents, activity=CustomActivity(name=f"MiniZinc {mzn_build}")
+        )
 
         # Create tree object to add commands to
         self.tree = app_commands.CommandTree(self)
