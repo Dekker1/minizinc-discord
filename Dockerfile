@@ -1,17 +1,17 @@
 FROM minizinc/minizinc:latest-alpine
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 WORKDIR /code
 
 RUN apk --no-cache add \
         gcc \
-        python3-dev \
-        poetry
+        python3-dev
 
-COPY poetry.lock /code
-COPY pyproject.toml /code
+COPY uv.lock pyproject.toml /code/
 
-RUN poetry install
+RUN uv sync --locked --no-dev
 
 COPY minizinc_discord.py /code
 
-CMD ["poetry", "run", "python", "minizinc_discord.py"]
+CMD ["uv", "run", "--no-sync", "python", "minizinc_discord.py"]

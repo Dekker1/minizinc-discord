@@ -1,15 +1,15 @@
 import enum
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import minizinc
-from discord import Intents, Interaction, Message, app_commands, Client, ui
+from discord import Client, Intents, Interaction, Message, app_commands, ui
 
 
-def get_time_str(statistics: Dict[str, Any]) -> str:
+def get_time_str(statistics: dict[str, Any]) -> str:
     if not "time" in statistics:
         return "No Time"
     time = statistics["time"]
@@ -31,6 +31,7 @@ no_solver = minizinc.Solver(
     "com.discord.no_solver",
     "false",
 )
+
 
 # Common functions
 def extract_code(content: str) -> str:
@@ -73,7 +74,7 @@ async def solve(
             f"{solver.name}, version {solver.version}, reported `{result.status}` in {get_time_str(result.statistics)}:```{sol}```",
         )
     except minizinc.MiniZincError as err:
-        await interaction.followup.send(f"```{str(err)}```")
+        await interaction.followup.send(f"```{err!s}```")
 
 
 async def flatten(
@@ -87,7 +88,7 @@ async def flatten(
     try:
         instance = minizinc.Instance(solver)
         instance.add_string(code)
-        with instance.flat(timeout=time_limit) as (fzn, ozn, statistics):
+        with instance.flat(timeout=time_limit) as (fzn, _ozn, _statistics):
             flatzinc = Path(fzn.name).read_text()
             if len(flatzinc) > 1800:
                 flatzinc = flatzinc[:1800]
@@ -97,7 +98,7 @@ async def flatten(
             )
             # FIXME: Full FlatZinc should be attached as a file when exceeding
     except minizinc.MiniZincError as err:
-        await interaction.followup.send(f"```{str(err)}```")
+        await interaction.followup.send(f"```{err!s}```")
 
 
 class MZNAction(enum.Enum):
@@ -127,7 +128,7 @@ class OptionModal(ui.Modal):
             time_limit = int(self.time_limit.value)
             if time_limit > 30:
                 await interaction.response.send_message(
-                    f"time limit cannot be set to more than 30 seconds", ephemeral=True
+                    "time limit cannot be set to more than 30 seconds", ephemeral=True
                 )
         except ValueError:
             await interaction.response.send_message(
@@ -191,7 +192,7 @@ class MZNClient(Client):
 
     async def on_ready(self):
         print(
-            f"{datetime.now().strftime('%H:%M:%S')} - {self.user} has connected to Discord!"
+            f"{datetime.now(timezone.utc).strftime('%H:%M:%S')} - {self.user} has connected to Discord!"
         )
 
 
