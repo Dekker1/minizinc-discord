@@ -6,7 +6,15 @@ from pathlib import Path
 from typing import Any
 
 import minizinc
-from discord import Client, Intents, Interaction, Message, app_commands, ui
+from discord import (
+    Client,
+    Intents,
+    Interaction,
+    Message,
+    SelectOption,
+    app_commands,
+    ui,
+)
 
 
 def get_time_str(statistics: dict[str, Any]) -> str:
@@ -30,6 +38,22 @@ no_solver = minizinc.Solver(
     f"{mzn_version[0]}.{mzn_version[1]}.{mzn_version[2]}",
     "com.discord.no_solver",
     "false",
+)
+STDLIB = "stdlib"
+
+# Solvers offered in the options menu. The GUI and tool "solvers" are of no use
+# here, and an unknown version means MiniZinc could not load the solver library.
+SOLVERS = sorted(
+    {
+        s.id: s
+        for solvers in minizinc.default_driver.available_solvers().values()
+        for s in solvers
+        if not s.isGUIApplication
+        and "tool" not in s.tags
+        and s.id != "org.minizinc.findmus"
+        and s.version != "<unknown version>"
+    }.values(),
+    key=lambda s: s.name,
 )
 
 
@@ -107,44 +131,54 @@ class MZNAction(enum.Enum):
 
 
 class OptionModal(ui.Modal):
-    solver = ui.TextInput(label="Solver")
-    # solver = ui.Select(options=["cbc", "chuffed", "gecode"], placeholder="chuffed")
-    time_limit = ui.TextInput(label="Time Limit", default="15")
-
     def __init__(self, message: Message, action: MZNAction) -> None:
         self.message = message
         self.action = action
-        if action == MZNAction.SOLVE:
-            title = "MiniZinc Solve Options"
-            self.solver.default = "gecode"
-        else:
-            title = "MiniZinc Flatten Options"
-            self.solver.default = "stdlib"
-        super().__init__(title=title)
+        solving = action == MZNAction.SOLVE
+        super().__init__(
+            title="MiniZinc Solve Options" if solving else "MiniZinc Flatten Options"
+        )
+
+        default = "org.gecode.gecode" if solving else STDLIB
+        options = [
+            SelectOption(
+                label=f"{s.name} {s.version}", value=s.id, default=s.id == default
+            )
+            for s in SOLVERS
+        ]
+        if not solving:
+            options.insert(
+                0, SelectOption(label=no_solver.name, value=STDLIB, default=True)
+            )
+        # Discord shows at most 25 choices
+        self.solver = ui.Select(options=options[:25])
+        self.time_limit = ui.TextInput(default="15")
+        self.add_item(ui.Label(text="Solver", component=self.solver))
+        self.add_item(
+            ui.Label(
+                text="Time Limit",
+                description="in seconds, at most 30",
+                component=self.time_limit,
+            )
+        )
 
     async def on_submit(self, interaction: Interaction):
-        time_limit = 15
         try:
             time_limit = int(self.time_limit.value)
-            if time_limit > 30:
-                await interaction.response.send_message(
-                    "time limit cannot be set to more than 30 seconds", ephemeral=True
-                )
         except ValueError:
             await interaction.response.send_message(
                 f"expected integer time limit, received {self.time_limit.value}",
                 ephemeral=True,
             )
-
-        try:
-            if self.action == MZNAction.FLATTEN and self.solver.value == "stdlib":
-                solver = no_solver
-            else:
-                solver = minizinc.Solver.lookup(self.solver.value)
-        except LookupError:
+            return
+        if time_limit > 30:
             await interaction.response.send_message(
-                f"solver {self.time_limit.value} could not be found", ephemeral=True
+                "time limit cannot be set to more than 30 seconds", ephemeral=True
             )
+            return
+
+        choice = self.solver.values[0]
+        solver = no_solver if choice == STDLIB else minizinc.Solver.lookup(choice)
 
         if self.action == MZNAction.SOLVE:
             await solve(interaction, self.message.content, solver, time_limit)
