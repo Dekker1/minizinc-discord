@@ -33,7 +33,7 @@ Whether you click “Flatten MiniZinc” or “Solve MiniZinc” this will open 
 ![Pop-up with the options that can be chosen when solving or flattening](./assets/options.png)
 
 By default, the MiniZinc Discord bot will use the `gecode` solver to solve, and a special `stdlib` option to compile with just the MiniZinc library (without a solver library). 
-The MiniZinc image by default additionally `cbc` and `chuffed`.
+The MiniZinc image additionally provides `chuffed`, `cp-sat`, `cbc`, and `highs`.
 
 If you want to change the time limit that is given to the MiniZinc compiler and the solver, then you can change the time limit option.
 Note that the time limit can never exceed 30 seconds.
