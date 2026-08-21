@@ -1,5 +1,6 @@
 import enum
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
@@ -32,6 +33,23 @@ no_solver = minizinc.Solver(
 )
 
 # Common functions
+def extract_code(content: str) -> str:
+    r"""Extract MiniZinc code from a Discord message, ignoring code fences and
+    any language tag.
+
+    >>> extract_code("```mzn\nvar 1..3: x;\n```")
+    'var 1..3: x;\n'
+    >>> extract_code("look:\n```\nvar 1..3: x;\n```\nright?")
+    'var 1..3: x;\n'
+    >>> extract_code("`var 1..3: x;`")
+    'var 1..3: x;'
+    """
+    match = re.search(r"```[ \t]*(?:[\w+#-]*[ \t]*\n)?(.*?)```", content, re.DOTALL)
+    if match is not None:
+        return match.group(1)
+    return content.strip("` \t")
+
+
 async def solve(
     interaction: Interaction,
     code: str,
@@ -40,7 +58,7 @@ async def solve(
 ):
     await interaction.response.defer(thinking=True)
 
-    code = code.strip("` \t")
+    code = extract_code(code)
     time_limit = timedelta(seconds=time_limit)
 
     try:
@@ -63,7 +81,7 @@ async def flatten(
 ):
     await interaction.response.defer(thinking=True)
 
-    code = code.strip("` \t")
+    code = extract_code(code)
     time_limit = timedelta(seconds=time_limit)
 
     try:
