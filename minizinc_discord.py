@@ -1,3 +1,4 @@
+import asyncio
 import enum
 import os
 import re
@@ -78,6 +79,20 @@ def extract_code(content: str) -> str:
     return content.strip("` \t")
 
 
+def check_model(code: str) -> str | None:
+    """Return the problem with the model, if MiniZinc finds one"""
+    if code.strip() == "":
+        return "This message does not contain any MiniZinc code."
+    instance = minizinc.Instance(no_solver)
+    instance.add_string(code)
+    try:
+        # Runs `minizinc --model-interface-only`, which parses and type checks
+        instance.analyse()
+    except minizinc.MiniZincError as err:
+        return str(err)
+    return None
+
+
 async def solve(
     interaction: Interaction,
     code: str,
@@ -134,13 +149,23 @@ class MZNAction(enum.Enum):
 
 
 class OptionModal(ui.Modal):
-    def __init__(self, message: Message, action: MZNAction) -> None:
+    def __init__(
+        self, message: Message, action: MZNAction, warning: str | None = None
+    ) -> None:
         self.message = message
         self.action = action
         solving = action == MZNAction.SOLVE
         super().__init__(
             title="MiniZinc Solve Options" if solving else "MiniZinc Flatten Options"
         )
+
+        if warning is not None:
+            self.add_item(
+                ui.TextDisplay(
+                    f"⚠️ MiniZinc reports the following problem with this message. "
+                    f"You can continue anyway.\n```{warning[:1000]}```"
+                )
+            )
 
         default = "org.gecode.gecode" if solving else STDLIB
         options = [
@@ -164,6 +189,17 @@ class OptionModal(ui.Modal):
                 component=self.time_limit,
             )
         )
+
+    @classmethod
+    async def create(cls, message: Message, action: MZNAction) -> "OptionModal":
+        """Create the modal, warning about any problem with the message"""
+        try:
+            warning = await asyncio.wait_for(
+                asyncio.to_thread(check_model, extract_code(message.content)), timeout=2
+            )
+        except asyncio.TimeoutError:
+            warning = None  # Leave it to the time limit of the action itself
+        return cls(message, action, warning)
 
     async def on_submit(self, interaction: Interaction):
         try:
@@ -191,12 +227,16 @@ class OptionModal(ui.Modal):
 
 @app_commands.context_menu(name="Solve MiniZinc")
 async def solve_menu(interaction: Interaction, message: Message):
-    await interaction.response.send_modal(OptionModal(message, MZNAction.SOLVE))
+    await interaction.response.send_modal(
+        await OptionModal.create(message, MZNAction.SOLVE)
+    )
 
 
 @app_commands.context_menu(name="Flatten MiniZinc")
 async def flatten_menu(interaction: Interaction, message: Message):
-    await interaction.response.send_modal(OptionModal(message, MZNAction.FLATTEN))
+    await interaction.response.send_modal(
+        await OptionModal.create(message, MZNAction.FLATTEN)
+    )
 
 
 # A command group that combines the MiniZinc commands
