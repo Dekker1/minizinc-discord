@@ -2,8 +2,11 @@ import asyncio
 import enum
 import os
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import minizinc
@@ -61,31 +64,82 @@ SOLVERS = sorted(
 )
 
 
+# Language tags that signal a code block contains data instead of a model
+DATA_TAGS = {"dzn", "json"}
+# File types that can be part of a MiniZinc instance
+SUFFIXES = {".mzn"} | {f".{tag}" for tag in DATA_TAGS}
+# Limit on the size of the attachments, to avoid compiling something absurd
+MAX_ATTACHED = 1024 * 1024
+
+
 # Common functions
-def extract_code(content: str) -> str:
-    r"""Extract MiniZinc code from a Discord message, ignoring code fences and
-    any language tag.
+def extract_code(content: str, fenced_only: bool = False) -> list[tuple[str, str]]:
+    r"""Extract the code blocks of a Discord message and the files they belong in
+
+    The language tag of a block signals whether it contains data, everything
+    else is considered part of the model. A message without any code fence is
+    taken to be code in full, unless ``fenced_only`` is set.
 
     >>> extract_code("```mzn\nvar 1..3: x;\n```")
-    'var 1..3: x;\n'
-    >>> extract_code("look:\n```\nvar 1..3: x;\n```\nright?")
-    'var 1..3: x;\n'
+    [('.mzn', 'var 1..3: x;\n')]
+    >>> extract_code("model\n```\nint: n;\n```\nand data\n```dzn\nn = 4;\n```")
+    [('.mzn', 'int: n;\n'), ('.dzn', 'n = 4;\n')]
     >>> extract_code("`var 1..3: x;`")
-    'var 1..3: x;'
+    [('.mzn', 'var 1..3: x;')]
+    >>> extract_code("can someone solve the attached?", fenced_only=True)
+    []
     """
-    match = re.search(r"```[ \t]*(?:[\w+#-]*[ \t]*\n)?(.*?)```", content, re.DOTALL)
-    if match is not None:
-        return match.group(1)
-    return content.strip("` \t")
+    blocks = re.findall(r"```[ \t]*(?:([\w+#-]*)[ \t]*\n)?(.*?)```", content, re.DOTALL)
+    if len(blocks) == 0 and not fenced_only:
+        blocks = [("", content.strip("` \t"))]
+    return [
+        (f".{tag}" if tag in DATA_TAGS else ".mzn", code)
+        for tag, code in blocks
+        if code.strip() != ""
+    ]
 
 
-def check_model(code: str) -> str | None:
-    """Return the problem with the model, if MiniZinc finds one"""
-    if code.strip() == "":
+@asynccontextmanager
+async def instance_files(message: Message) -> AsyncIterator[list[Path]]:
+    """Collect the MiniZinc files of a message in a temporary directory
+
+    Both the attachments and the code blocks of the message are used. Files
+    keep their name, so they can `include` each other. Included files are left
+    out of the instance itself, since including them again would be an error.
+    """
+    with TemporaryDirectory() as directory:
+        files = []
+        budget = MAX_ATTACHED
+        for attachment in message.attachments:
+            name = Path(attachment.filename).name
+            if Path(name).suffix not in SUFFIXES or attachment.size > budget:
+                continue
+            budget -= attachment.size
+            path = Path(directory) / name
+            path.write_bytes(await attachment.read())
+            files.append(path)
+        blocks = extract_code(message.content, fenced_only=len(files) > 0)
+        for i, (suffix, code) in enumerate(blocks):
+            path = Path(directory) / f"message{i}{suffix}"
+            path.write_text(code)
+            files.append(path)
+        included = {
+            name
+            for file in files
+            if file.suffix == ".mzn"
+            for name in re.findall(r'include\s*"([^"]+)"', file.read_text())
+        }
+        yield [file for file in files if file.name not in included]
+
+
+def check_model(files: list[Path]) -> str | None:
+    """Return the problem with the instance, if MiniZinc finds one"""
+    if len(files) == 0:
         return "This message does not contain any MiniZinc code."
-    instance = minizinc.Instance(no_solver)
-    instance.add_string(code)
     try:
+        instance = minizinc.Instance(no_solver)
+        for file in files:
+            instance.add_file(file)
         # Runs `minizinc --model-interface-only`, which parses and type checks
         instance.analyse()
     except minizinc.MiniZincError as err:
@@ -95,18 +149,18 @@ def check_model(code: str) -> str | None:
 
 async def solve(
     interaction: Interaction,
-    code: str,
+    files: list[Path],
     solver: minizinc.Solver,
     time_limit: int,
 ):
     await interaction.response.defer(thinking=True)
 
-    code = extract_code(code)
     time_limit = timedelta(seconds=time_limit)
 
     try:
         instance = minizinc.Instance(solver)
-        instance.add_string(code)
+        for file in files:
+            instance.add_file(file)
         result = await instance.solve_async(timeout=time_limit)
         sol = str(result.solution) if result.solution is not None else "No Solution"
         if len(sol) > 1800:
@@ -120,16 +174,19 @@ async def solve(
 
 
 async def flatten(
-    interaction: Interaction, code: str, solver: minizinc.Solver, time_limit: int
+    interaction: Interaction,
+    files: list[Path],
+    solver: minizinc.Solver,
+    time_limit: int,
 ):
     await interaction.response.defer(thinking=True)
 
-    code = extract_code(code)
     time_limit = timedelta(seconds=time_limit)
 
     try:
         instance = minizinc.Instance(solver)
-        instance.add_string(code)
+        for file in files:
+            instance.add_file(file)
         with instance.flat(timeout=time_limit) as (fzn, _ozn, _statistics):
             flatzinc = Path(fzn.name).read_text()
             if len(flatzinc) > 1800:
@@ -194,9 +251,10 @@ class OptionModal(ui.Modal):
     async def create(cls, message: Message, action: MZNAction) -> "OptionModal":
         """Create the modal, warning about any problem with the message"""
         try:
-            warning = await asyncio.wait_for(
-                asyncio.to_thread(check_model, extract_code(message.content)), timeout=2
-            )
+            async with instance_files(message) as files:
+                warning = await asyncio.wait_for(
+                    asyncio.to_thread(check_model, files), timeout=2
+                )
         except asyncio.TimeoutError:
             warning = None  # Leave it to the time limit of the action itself
         return cls(message, action, warning)
@@ -219,10 +277,11 @@ class OptionModal(ui.Modal):
         choice = self.solver.values[0]
         solver = no_solver if choice == STDLIB else minizinc.Solver.lookup(choice)
 
-        if self.action == MZNAction.SOLVE:
-            await solve(interaction, self.message.content, solver, time_limit)
-        else:
-            await flatten(interaction, self.message.content, solver, time_limit)
+        async with instance_files(self.message) as files:
+            if self.action == MZNAction.SOLVE:
+                await solve(interaction, files, solver, time_limit)
+            else:
+                await flatten(interaction, files, solver, time_limit)
 
 
 @app_commands.context_menu(name="Solve MiniZinc")

@@ -20,7 +20,12 @@ For example, the following message could be used by the bot.
 >
 > \`\`\`
 
-Note that the bot will ignore the backticks (e.g., \` or \`\`\`) in the message, allowing the user to use preformatted text.
+Note that the bot will ignore the backticks (e.g., \` or \`\`\`) and the language tag of a code block, allowing the user to use preformatted text.
+
+A model and its data can also be split over multiple code blocks.
+A block tagged `dzn` or `json` is used as a data file, any other block is considered part of the model.
+Alternatively, `.mzn`, `.dzn`, and `.json` files can simply be attached to the message.
+Attached files keep their name, so a model can `include` another attached file (an included file is not added to the instance itself).
 
 After you've sent a message to a channel where the bot is active, you can then right-click the message to find the actions the bot can perform in the context menu.
 
