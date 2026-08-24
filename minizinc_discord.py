@@ -5,6 +5,7 @@ import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -13,6 +14,7 @@ import minizinc
 from discord import (
     Client,
     CustomActivity,
+    File,
     Intents,
     Interaction,
     Message,
@@ -147,6 +149,21 @@ def check_model(files: list[Path]) -> str | None:
     return None
 
 
+async def send_output(
+    interaction: Interaction, description: str, output: str, filename: str
+):
+    """Reply with the output, attaching it as a file when it is too long
+
+    A Discord message can hold no more than 2000 characters.
+    """
+    if len(output) > 1800:
+        await interaction.followup.send(
+            description, file=File(BytesIO(output.encode()), filename=filename)
+        )
+    else:
+        await interaction.followup.send(f"{description}```{output}```")
+
+
 async def solve(
     interaction: Interaction,
     files: list[Path],
@@ -163,14 +180,14 @@ async def solve(
             instance.add_file(file)
         result = await instance.solve_async(timeout=time_limit)
         sol = str(result.solution) if result.solution is not None else "No Solution"
-        if len(sol) > 1800:
-            sol = sol[:1800]
-            sol += "\n% ...TRUNCATED..."
-        await interaction.followup.send(
-            f"{solver.name}, version {solver.version}, reported `{result.status}` in {get_time_str(result.statistics)}:```{sol}```",
+        await send_output(
+            interaction,
+            f"{solver.name}, version {solver.version}, reported `{result.status}` in {get_time_str(result.statistics)}:",
+            sol,
+            "solution.txt",
         )
     except minizinc.MiniZincError as err:
-        await interaction.followup.send(f"```{err!s}```")
+        await send_output(interaction, "", str(err), "error.txt")
 
 
 async def flatten(
@@ -188,16 +205,14 @@ async def flatten(
         for file in files:
             instance.add_file(file)
         with instance.flat(timeout=time_limit) as (fzn, _ozn, _statistics):
-            flatzinc = Path(fzn.name).read_text()
-            if len(flatzinc) > 1800:
-                flatzinc = flatzinc[:1800]
-                flatzinc += "\n% ...TRUNCATED..."
-            await interaction.followup.send(
-                f"Using the definitions of {solver.name}, version {solver.version}, this resulted in the following FlatZinc:```{flatzinc}```"
+            await send_output(
+                interaction,
+                f"Using the definitions of {solver.name}, version {solver.version}, this resulted in the following FlatZinc:",
+                Path(fzn.name).read_text(),
+                "model.fzn",
             )
-            # FIXME: Full FlatZinc should be attached as a file when exceeding
     except minizinc.MiniZincError as err:
-        await interaction.followup.send(f"```{err!s}```")
+        await send_output(interaction, "", str(err), "error.txt")
 
 
 class MZNAction(enum.Enum):
