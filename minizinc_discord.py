@@ -178,7 +178,7 @@ async def solve(
         instance = minizinc.Instance(solver)
         for file in files:
             instance.add_file(file)
-        result = await instance.solve_async(timeout=time_limit)
+        result = await instance.solve_async(time_limit=time_limit)
         sol = str(result.solution) if result.solution is not None else "No Solution"
         await send_output(
             interaction,
@@ -204,7 +204,7 @@ async def flatten(
         instance = minizinc.Instance(solver)
         for file in files:
             instance.add_file(file)
-        with instance.flat(timeout=time_limit) as (fzn, _ozn, _statistics):
+        with instance.flat(time_limit=time_limit) as (fzn, _ozn, _statistics):
             await send_output(
                 interaction,
                 f"Using the definitions of {solver.name}, version {solver.version}, this resulted in the following FlatZinc:",

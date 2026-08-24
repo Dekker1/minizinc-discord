@@ -74,3 +74,22 @@ When using the “Flatten MiniZinc” action, then the bot will reply something 
 To ensure that you are on the same MiniZinc version as the bot, you can run the `/mzn version` command.
 The bot will reply to the command with the output of `minizinc --version`.
 The command has an optional argument `announce`, when this is set to `True` then the bot sends a message to everyone in the channel, instead of only to you.
+
+## Development
+
+The bot is a single Python file, whose dependencies are managed using [uv](https://docs.astral.sh/uv/).
+
+```sh
+uv run ruff format .        # format
+uv run ruff check .         # lint
+uv run python -m unittest   # test
+```
+
+The tests fake the Discord objects that the bot receives, but use a real MiniZinc.
+If MiniZinc is not installed locally, then they can be run in the Docker image instead, which is what the CI does.
+
+```sh
+docker build --tag minizinc-discord .
+docker run --rm --volume "$PWD/test_minizinc_discord.py:/code/test_minizinc_discord.py:ro" \
+  minizinc-discord python -m unittest
+```

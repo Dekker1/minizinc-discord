@@ -11,7 +11,31 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Check formatting and lints
+        run: |
+          uv run --only-group dev ruff format --check .
+          uv run --only-group dev ruff check .
+
+      - name: Build the image
+        run: docker build --tag minizinc-discord .
+
+      - name: Run the tests
+        run: |
+          docker run --rm --volume "$PWD/test_minizinc_discord.py:/code/test_minizinc_discord.py:ro" \
+            minizinc-discord python -m unittest --verbose
+
   build-and-push-image:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
